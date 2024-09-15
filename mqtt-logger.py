@@ -1,9 +1,9 @@
 """
 Lightweight module / script to log mqtt topics to an sqlite3 database, and write this to csv once per day.
-Everything is recorded in UTC.
+All datetimes are in UTC.
 
 Idea:
-- listen to all mqtt topics that we subscribe to
+- listen to some mqtt topics
 - for each topic, the latest value is kept in a memory-buffer (dict)
 - when a particular topic is recieved (log_trigger_topic), we log the entire memory-buffer to an sqlite db (all columns with one single datetime)
 - if a topic from the memory buffer is "old" (e.g., older than 30 seconds), it gets written as nan (and a warning is shown)
@@ -23,42 +23,45 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-log_topics = [
-    "SMAHomeManager/psupply",
-    "SMAHomeManager/ppurchase",
-    "SMAHomeManager/esupply",
-    "SMAHomeManager/epurchase",
-    "SMAHomeManager/v1",
-    "SMAHomeManager/v2",
-    "SMAHomeManager/v3",
-    "SMATripower/pgenerate",
-    "VitocalOpen3E/DomesticHotWaterSensor/Actual",
-    "VitocalOpen3E/OutsideTemperatureSensor/Actual",
-    "VitocalOpen3E/FlowTemperatureSensor/Actual",
-    "VitocalOpen3E/ReturnTemperatureSensor/Actual",
-    "VitocalOpen3E/WaterPressureSensor/Actual",
-    "VitocalOpen3E/CentralHeatingPump",
-    "VitocalOpen3E/SmartGridReadyConsolidator/OperatingStatus",
-    "VitocalOpen3E/EnergyConsumptionCentralHeating/Today",
-    "VitocalOpen3E/EnergyConsumptionCentralHeating/CurrentYear",
-    "VitocalOpen3E/EnergyConsumptionDomesticHotWater/Today",
-    "VitocalOpen3E/EnergyConsumptionDomesticHotWater/CurrentYear",
-    "VitocalOpen3E/AllengraSensor/Actual",
-    "VitocalOpen3E/AllengraSensor/Temperature",
-    "VitocalOpen3E/ThermalPower",
-    "VitocalOpen3E/HeatPumpCompressor",
-    "VitocalOpen3E/AdditionalElectricHeater",
-    "VitocalOpen3E/HeatPumpCompressorStatistical/starts",
-    "VitocalOpen3E/HeatPumpCompressorStatistical/hours",
-    "VitocalOpen3E/CurrentElectricalPowerConsumptionRefrigerantCircuit",
-    "VitocalOpen3E/CurrentElectricalPowerConsumptionElectricHeater",
-    "VitocalOpen3E/CurrentElectricalPowerConsumptionSystem",
-    "VitocalOpen3E/CurrentThermalCapacitySystem",
-    "VitocalOpen3E/FourThreeWayValveValveCurrentPosition"
-]
+# MQTT payloads are just sequences of bytes 
+# For convenience, we "decode" these when writing into the db (and the exported files), following these rules:
+log_topic_types = {
+    "SMAHomeManager/psupply":"float",
+    "SMAHomeManager/ppurchase":"float",
+    "SMAHomeManager/esupply":"float",
+    "SMAHomeManager/epurchase":"float",
+    "SMAHomeManager/v1":"float",
+    "SMAHomeManager/v2":"float",
+    "SMAHomeManager/v3":"float",
+    "SMATripower/pgenerate":"float",
+    "VitocalOpen3E/DomesticHotWaterSensor/Actual":"float",
+    "VitocalOpen3E/OutsideTemperatureSensor/Actual":"float",
+    "VitocalOpen3E/FlowTemperatureSensor/Actual":"float",
+    "VitocalOpen3E/ReturnTemperatureSensor/Actual":"float",
+    "VitocalOpen3E/WaterPressureSensor/Actual":"float",
+    "VitocalOpen3E/CentralHeatingPump":"float",
+    "VitocalOpen3E/SmartGridReadyConsolidator/OperatingStatus":"float",
+    "VitocalOpen3E/EnergyConsumptionCentralHeating/Today":"float",
+    "VitocalOpen3E/EnergyConsumptionCentralHeating/CurrentYear":"float",
+    "VitocalOpen3E/EnergyConsumptionDomesticHotWater/Today":"float",
+    "VitocalOpen3E/EnergyConsumptionDomesticHotWater/CurrentYear":"float",
+    "VitocalOpen3E/AllengraSensor/Actual":"float",
+    "VitocalOpen3E/AllengraSensor/Temperature":"float",
+    "VitocalOpen3E/ThermalPower":"float",
+    "VitocalOpen3E/HeatPumpCompressor":"float",
+    "VitocalOpen3E/AdditionalElectricHeater":"float",
+    "VitocalOpen3E/HeatPumpCompressorStatistical/starts":"int",
+    "VitocalOpen3E/HeatPumpCompressorStatistical/hours":"float",
+    "VitocalOpen3E/CurrentElectricalPowerConsumptionRefrigerantCircuit":"float",
+    "VitocalOpen3E/CurrentElectricalPowerConsumptionElectricHeater":"float",
+    "VitocalOpen3E/CurrentElectricalPowerConsumptionSystem":"float",
+    "VitocalOpen3E/CurrentThermalCapacitySystem":"float",
+    "VitocalOpen3E/FourThreeWayValveValveCurrentPosition":"int"
+    }
+
+log_topics = [key for (key, value) in log_topic_types.items()]
 
 log_trigger_topic = "VitocalOpen3E/CurrentElectricalPowerConsumptionSystem"
-
 
 def translate_topic_mqtt_to_db(topic_name):
     return topic_name.replace("/", "_")
@@ -229,7 +232,14 @@ def log_mqtt_to_db(newdict, db):
     for key, value in newdict.items():
         age = (lognow - value["date"]).total_seconds()
         if age < 30: # younger than 30 seconds
-            logvalue = value["payload"]
+            # Then we decode this value
+            logvalue_str = value["payload"].decode('UTF-8')
+            if log_topic_types[key] == "float":
+                logvalue = float(logvalue_str)
+            elif log_topic_types[key] == "int":
+                logvalue = int(round(float(logvalue_str)))
+            else:
+                logvalue = str(logvalue_str)
         else:
             logvalue = float('nan')
             logger.warning(f"Value for topic {key} is old, last data: {value['date']}: {value['payload']}")
