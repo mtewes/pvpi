@@ -29,14 +29,15 @@ def read_tripower():
         #print(json.dumps(dashvals, indent="  "))
         #print(json.dumps(dashvals))
     
-        parsed = {#"psupply":dashvals["6100_40463600"]["9"][0]["val"],
-                  #"ppurchase":dashvals["6100_40463700"]["9"][0]["val"],
+        parsed = {"psupply":dashvals["6100_40463600"]["9"][0]["val"],
+                  "ppurchase":dashvals["6100_40463700"]["9"][0]["val"],
                   "pgenerate":dashvals["6100_0046C200"]["9"][0]["val"],
-                  #"esupply":dashvals["6400_00462400"]["9"][0]["val"]/1000.0,
-                  #"epurchase":dashvals["6400_00462500"]["9"][0]["val"]/1000.0,
+                  "esupply":dashvals["6400_00462400"]["9"][0]["val"]/1000.0,
+                  "epurchase":dashvals["6400_00462500"]["9"][0]["val"]/1000.0,
                   }
-        #parsed["pconsume"] = max(parsed["pgenerate"] + parsed["ppurchase"] - parsed["psupply"], 0)
-        # Somehow all these other values are now wrong. But anyway we just need pgenerate.
+        parsed["pconsume"] = max(parsed["pgenerate"] + parsed["ppurchase"] - parsed["psupply"], 0)
+        # This does not work well when the weather is rapidly changing, as these measurements are not simultaneous it seems.
+
 
         print(parsed)
         return parsed
@@ -63,7 +64,7 @@ def run():
                 msg_info = mqttc.publish(f"SMATripower/{key}", value, qos=0)
                 msg_info.wait_for_publish()
 
-            time.sleep(15)
+            time.sleep(3)
 
     except KeyboardInterrupt:
         print("Bye!")

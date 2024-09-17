@@ -1,8 +1,11 @@
 """
-Adapted from this:
+Adapted from:
 https://github.com/c0deliner/venus-homemanager/blob/main/homemeanger_decoder.py
 
-I added the mqtt publishing part.
+Added the MQTT part.
+
+But values are wrong, maybe delayed, compared to what the tripower and Sunny Portal reports.
+To be investigated.
 
 """
 
@@ -128,9 +131,15 @@ class HomeManager20:
         self._decode_data()
         if len(self.hmdata) == 62:
             simplified_dict = {"psupply":self.hmdata["negative_active_demand"],
+                               "psupplyreactive":self.hmdata["negative_reactive_demand"],
+                               "psupplyapparent":self.hmdata["negative_apparent_demand"],
                                "ppurchase":self.hmdata["positive_active_demand"],
+                               "ppurchasereactive":self.hmdata["positive_reactive_demand"],
+                               "ppurchaseapparent":self.hmdata["positive_apparent_demand"],
                                "esupply":self.hmdata["negative_active_energy"],
                                "epurchase":self.hmdata["positive_active_energy"],
+                               "power_factor":self.hmdata["power_factor"],
+                               "current_transformer_ratio":self.hmdata["current_transformer_ratio"],
                                "v1":self.hmdata["voltage_L1"],
                                "v2":self.hmdata["voltage_L2"],
                                "v3":self.hmdata["voltage_L3"]
@@ -154,6 +163,7 @@ def main():
     try:
         while True:
             d = sma.read_data()
+            #print(d)
             for (key, value) in d.items():
                 msg_info = mqttc.publish(f"SMAHomeManager/{key}", value, qos=0)
                 msg_info.wait_for_publish()
