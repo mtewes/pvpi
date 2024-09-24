@@ -17,7 +17,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-
+verbose = False
 
 MCAST_GRP = '239.12.255.254'
 MCAST_PORT = 9522
@@ -146,7 +146,8 @@ class HomeManager20:
                             }
             return simplified_dict
         else:
-            print(self.hmdata)
+            if verbose:
+                print("Different data length: ignoring: ", self.hmdata)
             return {}
         
 
@@ -162,13 +163,15 @@ def main():
 
     try:
         while True:
-            d = sma.read_data()
+            for i in range(10):
+                d = sma.read_data()
+                #print("tick")
             #print(d)
             for (key, value) in d.items():
                 msg_info = mqttc.publish(f"SMAHomeManager/{key}", value, qos=0)
                 msg_info.wait_for_publish()
 
-            time.sleep(2)
+            #time.sleep(5)
 
     except KeyboardInterrupt:
         print("Bye!")

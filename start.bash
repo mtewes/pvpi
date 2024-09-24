@@ -1,7 +1,7 @@
 
 
 
-# the exec sh is to keep the screen alive after the command has ended
+# the exec bash is to keep the screen alive after the command has ended
 
 
 sudo ip link set can0 type can bitrate 250000

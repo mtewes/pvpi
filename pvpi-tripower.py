@@ -7,7 +7,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-
+verbose = False
 
 def read_tripower():
     """
@@ -17,7 +17,18 @@ def read_tripower():
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=urllib3.exceptions.InsecureRequestWarning)
-        response = requests.get(tripower_json_url, verify=False)
+        got_response = False
+        while got_response == False:
+            try:
+                response = requests.get(tripower_json_url, verify=False)
+                got_response = True
+            except Exception as e:
+                print("Error in http request:")
+                print(e)
+                print("Retry in 60 s")
+                time.sleep(60)
+
+
 
     if response.status_code != 200:
         dict = {"tripower_respons_status": response.status_code}
@@ -38,11 +49,11 @@ def read_tripower():
         parsed["pconsume"] = max(parsed["pgenerate"] + parsed["ppurchase"] - parsed["psupply"], 0)
         # This does not work well when the weather is rapidly changing, as these measurements are not simultaneous it seems.
 
-
-        print(parsed)
+        if verbose:
+            print(parsed)
         return parsed
 
-    except TypeError:
+    except (TypeError, KeyError):
         print("Issue with data:", dashvals)
         return {"tripower_parsing_issue":1}
     #print(parsed)
@@ -59,12 +70,14 @@ def run():
 
     try:
         while True:
+        
             d = read_tripower()
             for (key, value) in d.items():
                 msg_info = mqttc.publish(f"SMATripower/{key}", value, qos=0)
                 msg_info.wait_for_publish()
 
             time.sleep(3)
+        
 
     except KeyboardInterrupt:
         print("Bye!")
