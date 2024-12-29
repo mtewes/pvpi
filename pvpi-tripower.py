@@ -1,4 +1,5 @@
 import sys
+import secretsettings
 import requests
 import warnings
 import urllib3
@@ -13,7 +14,7 @@ def read_tripower():
     """
     """
 
-    tripower_json_url = "https://192.168.0.34/dyn/getDashValues.json"
+    tripower_json_url = secretsettings.tripower_url + "dyn/getDashValues.json"
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=urllib3.exceptions.InsecureRequestWarning)
