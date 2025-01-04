@@ -23,6 +23,7 @@ import schedule
 import smtplib
 from email.message import EmailMessage
 
+import plotdb
 
 import logging
 logger = logging.getLogger(__name__)
@@ -36,30 +37,39 @@ def now_ymd():
     return (tmp.year, tmp.month, tmp.day)
 
 
-def make_plot():
-
+def make_plot(day):
     """
-    yesterday = now() - timedelta(days=1)
-        
-    dbdirname = self.name
-    yeardirname = yesterday.strftime('%Y')
-        
-    dbdir = os.path.join(self.export_workdir, dbdirname, yeardirname)
-    os.makedirs(dbdir, exist_ok=True)
-        
-    filename = yesterday.strftime('%Y-%m-%d') + ".csv"
+    Wrapper to create the plot for the daily email
     """
 
+    input_data_dir = os.path.join(secretsettings.data_path, "pvpi")
 
-def data_file_path(day, path_prefix=None):
+    daily_plots_dir = os.path.join(secretsettings.data_path, "daily_plots")
+    os.makedirs(daily_plots_dir, exist_ok=True)
 
-    # Date of yesterday for filename:
-    #day = now() - timedelta(days=1)
+    input_data_path = data_file_path(day, input_data_dir, ext="csv")
+    daily_plot_path = data_file_path(day, daily_plots_dir, ext="pdf")
+
+    plotdb.write_daily_overview_fig(input_data_path, daily_plot_path)
+
+    return daily_plot_path
+
+
+
+
+def data_file_path(day, path_prefix, ext="csv"):
+    """
+    Provides the paths to data files
+    Also makes sure the directory for these files exists
+
+    """
             
     yeardirname = day.strftime('%Y')
         
     dbdir = os.path.join(path_prefix, yeardirname)
-    filename = day.strftime('%Y-%m-%d') + ".csv"
+    os.makedirs(dbdir, exist_ok=True)
+
+    filename = day.strftime('%Y-%m-%d') + "." + ext
     filepath = os.path.join(dbdir, filename)
     return filepath
 
@@ -92,7 +102,8 @@ def send_mail(subject="No Subject", body="Body", attachment_filepaths=None):
             filename = os.path.basename(file)
             with open(file, 'rb') as fp:
                 file_data = fp.read()
-                msg.add_attachment(file_data, maintype="text/csv", subtype="text/csv", filename=filename)
+                #msg.add_attachment(file_data, maintype="text/csv", subtype="text/csv", filename=filename)
+                msg.add_attachment(file_data, maintype="application", subtype="pdf", filename=filename)
 
     # Connecting to server and sending email
     # Edit the following line with your provider's SMTP server details
@@ -124,10 +135,12 @@ def job():
 
     # Create the plot:
 
+    attachment_file_path = make_plot(yesterday)
+
 
     # Send the email:
 
-    attachment_file_path = data_file_path(yesterday, path_prefix=os.path.join(secretsettings.data_path, "pvpi"))
+    #attachment_file_path = data_file_path(yesterday, os.path.join(secretsettings.data_path, "pvpi"), ext="csv")
     subject = f"[Haus] Bericht {nice_day_string}"
     body = f"Bericht {nice_day_string}"
     attachment_filepaths = [attachment_file_path]
