@@ -1,3 +1,10 @@
+"""
+Module with helper code for the database logging
+
+
+"""
+
+
 import sqlite3
 import csv
 from datetime import datetime, timedelta

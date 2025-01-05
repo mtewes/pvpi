@@ -23,7 +23,7 @@ import schedule
 import smtplib
 from email.message import EmailMessage
 
-import plotdb
+import plotting
 
 import logging
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def make_plot(day):
     input_data_path = data_file_path(day, input_data_dir, ext="csv")
     daily_plot_path = data_file_path(day, daily_plots_dir, ext="pdf")
 
-    plotdb.write_daily_overview_fig(input_data_path, daily_plot_path)
+    plotting.write_daily_overview_fig(input_data_path, daily_plot_path)
 
     return daily_plot_path
 

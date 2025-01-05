@@ -26,7 +26,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 import io
 
 import pandas as pd
-import logdb
+import database_logging
 
 from optparse import OptionParser
 
@@ -45,7 +45,7 @@ def get_df_from_db(dbfilepath, nhours=5, mode=None):
 
     outdict = {}
     
-    ldb = logdb.LogDB(name=name)
+    ldb = database_logging.LogDB(name=name)
     if mode is None:
         cmd = """SELECT * from {} WHERE 
             datetime > DATETIME('NOW', '-{} hour') 
@@ -122,6 +122,9 @@ def closefig():
     plt.close()
 
 def getpng(fig):
+    """
+    If I rembember well this was useful to display an image (on the epaper screen) without writing to disk
+    """
 
     canvas = FigureCanvas(fig)
     output = io.BytesIO()
