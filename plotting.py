@@ -1,5 +1,5 @@
 """
-Module to create the plot
+Module with all the code to create plots
 
 
 
