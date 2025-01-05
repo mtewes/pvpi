@@ -63,8 +63,8 @@ def read_tripower():
 def run():
 
     
-    broker = "heizung.local"
-    port = 1883
+    broker = secretsettings.mqtt_broker
+    port = secretsettings.mqtt_port
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     mqttc.connect(broker, port)
     mqttc.loop_start()

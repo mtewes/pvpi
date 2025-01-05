@@ -19,6 +19,8 @@ import os
 
 import paho.mqtt.client as mqtt
 
+import secretsettings
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -293,11 +295,15 @@ def on_message(client, userdata, message):
 def run():
 
     #db = LogDB(name="pvpi", path=":memory:", export_workdir="/home/mtewes/data", cols=log_topics_db)
-    db = LogDB(name="pvpi", path="/home/mtewes/data/pvpi.db", export_workdir="/home/mtewes/data/", cols=log_topics_db)
+    
+    dbpath = os.path.join(secretsettings.data_path, "pvpi.db")
+    export_workdir = secretsettings.data_path
+
+    db = LogDB(name="pvpi", path=dbpath, export_workdir=export_workdir, cols=log_topics_db)
     ini_userdata = {"dict":{}, "db":db}
 
-    broker = "heizung.local"
-    port = 1883
+    broker = secretsettings.mqtt_broker
+    port = secretsettings.mqtt_port
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     mqttc.on_connect = on_connect
     mqttc.on_message = on_message
