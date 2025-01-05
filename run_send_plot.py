@@ -1,5 +1,5 @@
 """
-Send an overview plot of the last day via email, or upload to server
+Top-level script to create and send an overview plot per day
 
 
 
