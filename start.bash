@@ -14,22 +14,22 @@ exec bash'
 
 screen -S hm -dm bash -c 'cd /home/mtewes/pvpi;
 source /home/mtewes/pvpi-venv/bin/activate;
-python pvpi-homemanager.py;
+python run_homemanager_to_mqtt.py;
 exec bash'
 
 screen -S tripower -dm bash -c 'cd /home/mtewes/pvpi;
 source /home/mtewes/pvpi-venv/bin/activate;
-python pvpi-tripower.py;
+python run_tripower_to_mqtt.py;
 exec bash'
 
 screen -S log -dm bash -c 'cd /home/mtewes/pvpi;
 source /home/mtewes/pvpi-venv/bin/activate;
-python mqtt-logger.py;
+python run_mqtt_logger.py;
 exec bash'
 
 screen -S mail -dm bash -c 'cd /home/mtewes/pvpi;
 source /home/mtewes/pvpi-venv/bin/activate;
-python send_plot.py;
+python run_send_plot.py;
 exec bash'
 
 
