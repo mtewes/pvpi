@@ -34,6 +34,7 @@ def read_tripower():
     if response.status_code != 200:
         dict = {"tripower_respons_status": response.status_code}
         print(dict)
+        print(tripower_json_url)
         return(dict)
 
     try:
