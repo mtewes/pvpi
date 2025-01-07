@@ -14,6 +14,7 @@ def read_tripower():
     """
     """
 
+
     tripower_json_url = secretsettings.tripower_url + "dyn/getDashValues.json"
 
     with warnings.catch_warnings():
@@ -21,7 +22,7 @@ def read_tripower():
         got_response = False
         while got_response == False:
             try:
-                response = requests.get(tripower_json_url, verify=False)
+                response = requests.get(tripower_json_url, verify=False, timeout=3.0)
                 got_response = True
             except Exception as e:
                 print("Error in http request:")
@@ -30,6 +31,7 @@ def read_tripower():
                 time.sleep(60)
 
 
+    print(response)
 
     if response.status_code != 200:
         dict = {"tripower_respons_status": response.status_code}
