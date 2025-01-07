@@ -31,7 +31,6 @@ def read_tripower():
                 time.sleep(60)
 
 
-    print(response)
 
     if response.status_code != 200:
         dict = {"tripower_respons_status": response.status_code}
