@@ -146,7 +146,31 @@ def job():
     attachment_filepaths = [attachment_file_path]
 
     if os.path.exists(attachment_file_path):
-        send_mail(subject=subject, body=body, attachment_filepaths=attachment_filepaths)
+        
+        # We send the email
+        nb_attempts = 1
+        keep_trying = True
+
+        while keep_trying:
+
+            if nb_attempts > 1:
+                failure_message = f", attempt {nb_attempts}"
+            else:
+                failure_message = ""
+
+            try:
+                send_mail(subject=subject, body=body+failure_message, attachment_filepaths=attachment_filepaths)
+                keep_trying = False
+            except Exception as e:
+                print(f"Attempt {nb_attempts}:")
+                print(e)
+                nb_attempts += 1
+                time.sleep(3*60)
+            
+            if nb_attempts > 3:
+                print("It doesn't work, stopping for today.")
+                keep_trying = False
+
 
     else:
         logger.warning(f"{attachment_file_path} does not exist!")

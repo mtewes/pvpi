@@ -56,8 +56,10 @@ def read_tripower():
             print(parsed)
         return parsed
 
-    except (TypeError, KeyError):
+    except (TypeError, KeyError, IndexError) as e:
         print("Issue with data:", dashvals)
+        print("The raised exception is:")
+        print(e)
         return {"tripower_parsing_issue":1}
     #print(parsed)
     

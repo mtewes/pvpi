@@ -554,7 +554,21 @@ if __name__ == '__main__':
 
     logging.info(options)
 
+    """
+    if "y" in options.todolist:
+        # create the daily overview fig for yesterday:
+        yesterday = now() - timedelta(days=1)
 
+    #nice_day_string = yesterday.strftime("%A %Y-%m-%d")
+    
+    nice_day_string = format_date(yesterday, format='full', locale='DE_de')
+    print(f"Starting job for {nice_day_string}...")
+
+    # Create the plot:
+
+    attachment_file_path = make_plot(yesterday)
+    """
+    
     write_daily_overview_fig("/home/mtewes/data/pvpi/2025/2025-01-03.csv", "/home/mtewes/test.pdf")
 
 

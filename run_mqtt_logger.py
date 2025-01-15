@@ -63,7 +63,10 @@ log_topic_types = {
     "VitocalOpen3E/CurrentElectricalPowerConsumptionElectricHeater":"float",
     "VitocalOpen3E/CurrentElectricalPowerConsumptionSystem":"float",
     "VitocalOpen3E/CurrentThermalCapacitySystem":"float",
-    "VitocalOpen3E/FourThreeWayValveValveCurrentPosition":"int"
+    "VitocalOpen3E/FourThreeWayValveValveCurrentPosition":"int",
+    "WohnzimmerUhr/temperature":"float",
+    "WohnzimmerUhr/humidity":"float",
+    "WohnzimmerUhr/pressure":"float"
     }
 
 log_topics = [key for (key, value) in log_topic_types.items()]
