@@ -252,7 +252,7 @@ def log_mqtt_to_db(newdict, db):
                 logvalue = str(logvalue_str)
         else:
             logvalue = float('nan')
-            logger.warning(f"Value for topic {key} is old, last data: {value['date']}: {value['payload']}")
+            #logger.warning(f"Value for topic {key} is old, last data: {value['date']}: {value['payload']}")
 
         logkey = translate_topic_mqtt_to_db(key)
         logdict[logkey] = logvalue

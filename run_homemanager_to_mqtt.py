@@ -167,13 +167,17 @@ def main():
         while True:
             for i in range(10):
                 d = sma.read_data()
-                #print("tick")
+            if verbose:
+                print("Received 10 multicast messages.")
             #print(d)
             for (key, value) in d.items():
                 msg_info = mqttc.publish(f"SMAHomeManager/{key}", value, qos=0)
                 msg_info.wait_for_publish()
 
             #time.sleep(5)
+        
+            if verbose:
+                print("Published to MQTT")
 
     except KeyboardInterrupt:
         print("Bye!")

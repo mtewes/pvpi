@@ -50,7 +50,11 @@ def make_plot(day):
     input_data_path = data_file_path(day, input_data_dir, ext="csv")
     daily_plot_path = data_file_path(day, daily_plots_dir, ext="pdf")
 
-    plotting.write_daily_overview_fig(input_data_path, daily_plot_path)
+    if os.path.exists(input_data_path):
+        plotting.write_daily_overview_fig(input_data_path, daily_plot_path)
+    else:
+        logger.warning(f"{input_data_path} does not exist!")
+
 
     return daily_plot_path
 
