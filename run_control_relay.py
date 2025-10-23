@@ -119,7 +119,7 @@ def main():
     conditions_first_met = None
     conditions_last_met = None
     elapsed_met = None
-    elasped_not_met = None
+    elapsed_not_met = None
 
 
     display_modes = ["time", "status", "elapsed"]
@@ -164,22 +164,22 @@ def main():
 
                 if conditions_last_met is not None: # They were met not long before...
                     logger.debug(f"Conditions no longer met right now")
-                    elasped_not_met = now() - conditions_last_met
+                    elapsed_not_met = now() - conditions_last_met
 
-                    if elasped_not_met > timedelta(minutes=5):
+                    if elapsed_not_met > timedelta(minutes=5):
                         logger.info("Conditions not met for over 5 minutes!")
 
                         # Resettign everything
                         conditions_first_met = None
                         conditions_last_met = None
                         elapsed_met = None
-                        elasped_not_met = None
+                        elapsed_not_met = None
 
                         # Switch off relay
                         if chan1.value == 1:
                             chan1.off()
                     else:
-                        logger.debug(f"Waiting if conditions improve since {elasped_not_met.total_seconds()} seconds")
+                        logger.debug(f"Waiting if conditions improve since {elapsed_not_met.total_seconds()} seconds")
 
 
             display_mode = display_modes[display_i]
@@ -187,15 +187,22 @@ def main():
                 displaystr = now().strftime("%H:%M UT")
         
             elif display_mode == "status":
-                displaystr = f"P{power/1000.0:0>3.1f}|R{chan1.value}{chan2.value}"
+                displaystr = f"P{power/1000.0:0>3.1f} R{chan1.value}{chan2.value}"
             
             elif display_mode == "elapsed":
-                str_g = f"G{int(elapsed_met.total_seconds()/60):0>2d}m" if elapsed_met is not None else "G---"
-                str_n = f"N{int(elasped_not_met.total_seconds()/60):0>2d}m" if elasped_not_met is not None else "N---"
+
+                elapsed_met_minutes = min(int(elapsed_met.total_seconds()/60), 99) if elapsed_met is not None else -1
+                elapsed_not_met_minutes = min(int(elapsed_not_met.total_seconds()/60), 99) if elapsed_not_met is not None else -1
+
+                str_g = f"G{elapsed_met_minutes:0>2d} " if elapsed_met is not None else "G-- "
+                str_n = f"N{elapsed_not_met_minutes:0>2d} " if elapsed_not_met is not None else "N-- "
                 displaystr = str_g + str_n
 
+            
             assert len(displaystr) == 8
             logger.debug(f"displaystr: {displaystr}")
+            
+            lcd.cursor_pos = (0, 0)
             lcd.write_string(displaystr)
 
             time.sleep(1)
