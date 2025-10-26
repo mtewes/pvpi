@@ -8,6 +8,25 @@ We listen to MQTT to get the current power data.
 If we're feeding in above some threshhold and time, we switch the SG-Ready state of the heatpump.
 
 
+Ideas:
+- we don't want to switch the heatpump on and then quickly off as it uses power.
+
+So if it's off, we wai
+
+
+(psupply > 2000 and pwp < 500 (i..e, WP is off)) --> then it seems ok to turn it on via SG-Ready if this persists for 30 min.
+ *or*  
+(psupply > 1000  and pwp > 500 (i.e., WP is on)) --> then it's ok to increase target temp (or mainttain current status).
+
+first line: basically means that pgenerate > 2000
+second line: also similar to pgenerate > 2000 ---> but here we detect if some other consumer uses lots of this power.
+
+
+
+
+
+
+
 About the LCD display:
 https://gpiozero.readthedocs.io/en/latest/api_output.html#base-classes
 
@@ -59,6 +78,9 @@ from RPLCD.i2c import CharLCD # connected to 3.3V
 
 ##### Functions for MQTT
 
+userdata = {} # We use this to keep track of the last post for each topic
+
+topics = ["SMAHomeManager/psupply", "SMATripower/pgenerate", "VitocalOpen3E/CurrentElectricalPowerConsumptionSystem", "VitocalOpen3E/DomesticHotWaterSensor/Actual"]
 
 def now():
     return datetime.now(timezone.utc)
@@ -69,9 +91,9 @@ def on_connect(client, datadict, flags, reason_code, properties):
     else:
         # we should always subscribe from on_connect callback to be sure
         # our subscribed is persisted across reconnections.
-        client.subscribe("SMAHomeManager/psupply")
-        client.subscribe("SMATripower/pgenerate")
-        client.subscribe("VitocalOpen3E/CurrentElectricalPowerConsumptionSystem")
+        for topic in topics:    
+            client.subscribe(topic)
+        
 
 
 def on_message(client, userdata, message):
@@ -101,7 +123,7 @@ def main():
 
     # Setup MQTT
 
-    userdata = {} # We use this to keep track of the last post for each topic
+    
     broker = secretsettings.mqtt_broker
     port = secretsettings.mqtt_port
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -112,8 +134,6 @@ def main():
 
     mqttc.loop_start()
 
-    #try:
-    #    mqttc.loop_forever()
 
 
     conditions_first_met = None
@@ -122,29 +142,37 @@ def main():
     elapsed_not_met = None
 
 
-    display_modes = ["time", "status", "elapsed"]
+    display_modes = ["time", "status", "elapsed", "WPpower", "WWtemp"]
     display_i = -1
 
     try:
         while True:
 
             display_i += 1
-            if display_i > 2:
+            if display_i > len(display_modes)-1:
                 display_i = 0
 
-            try:
-                power = float(userdata["SMATripower/pgenerate"]["payload"])
-                lastupdate = userdata["SMATripower/pgenerate"]["date"]
-            except KeyError:
-                power = 0.0
-                lastupdate = now() - timedelta(hours=1)
 
-            if now() - lastupdate > timedelta(minutes=1): # Data is old
-                logger.info(f"Data is old, from {lastupdate.isoformat()}")
+            for topic in topics:
+                
+                try:
+                    lastupdate = userdata[topic]["date"]
+                    if now() - lastupdate > timedelta(minutes=1): # Data is old
+                        logger.info(f"Data of {topic} is old, from {lastupdate.isoformat()}")
+                        userdata[topic]["value"] = None
+                    else:
+                        userdata[topic]["value"] = float(userdata[topic]["payload"])
+
+                except KeyError:
+                    userdata[topic] = {"value": None}
+
+            
+            power = userdata["SMATripower/pgenerate"]["value"]
+            if power is None:
                 power = 0.0
         
 
-            if power > 1500: # Conditions are met right now
+            if power > 2000: # Conditions are met right now
 
                 if conditions_first_met is None: # We set the time that the conditions were first met
                     conditions_first_met = now()
@@ -166,8 +194,8 @@ def main():
                     logger.debug(f"Conditions no longer met right now")
                     elapsed_not_met = now() - conditions_last_met
 
-                    if elapsed_not_met > timedelta(minutes=5):
-                        logger.info("Conditions not met for over 5 minutes!")
+                    if elapsed_not_met > timedelta(minutes=10):
+                        logger.info("Conditions not met for over 10 minutes!")
 
                         # Resettign everything
                         conditions_first_met = None
@@ -198,7 +226,15 @@ def main():
                 str_n = f"N{elapsed_not_met_minutes:0>2d} " if elapsed_not_met is not None else "N-- "
                 displaystr = str_g + str_n
 
-            
+            elif display_mode == "WPpower":
+                wp_power = userdata["VitocalOpen3E/CurrentElectricalPowerConsumptionSystem"]["value"]
+                displaystr = f"WP {wp_power: >4.0f}W" if wp_power is not None else "WP ----W"
+
+            elif display_mode == "WWtemp":
+                ww_temp = userdata["VitocalOpen3E/DomesticHotWaterSensor/Actual"]["value"]
+                displaystr = f"WW {ww_temp: >4.1f}C" if ww_temp is not None else "WW ----C"
+                
+
             assert len(displaystr) == 8
             logger.debug(f"displaystr: {displaystr}")
             

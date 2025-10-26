@@ -1,6 +1,9 @@
 """
 Module with all the code to create plots
 
+The database and logging (csv) work in UTC.
+The plots are created in Europe/Berlin timezone.
+
 
 
 """
@@ -25,6 +28,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 #from matplotlib.figure import Figure
 import io
 
+import numpy as np
 import pandas as pd
 import database_logging
 
@@ -104,15 +108,18 @@ def create_overview_fig(df, suptitle=None):
     #fig = plt.figure(figsize=(30,25), dpi=100) # (w, h)
     #fig = plt.figure(figsize=(15,12), dpi=200) # (w, h) # For subplots(4, 1)
     #fig = plt.figure(figsize=(10,10), dpi=200) # (w, h) # For subplots(4, 1)
-    fig = plt.figure(figsize=(12,7)) # (w, h) # For subplots(4, 1)
+    fig = plt.figure(figsize=(12,11)) # (w, h) # For subplots(5, 1)
 
     
-    axes = fig.subplots(3, 1)
-    plot_power(axes[0], df)
-    plot_heat_temps(axes[1], df)
-    plot_explore(axes[2], df)
+    axes = fig.subplots(5, 1)
+    plot_power_log(axes[0], df)
+    plot_power(axes[1], df)
+    plot_heat_temps(axes[2], df)
+    plot_indoor(axes[3], df)
+    plot_outdoor(axes[4], df)
+    #plot_explore(axes[3], df)
 
-    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.93, y=0.98, fontsize=10)
+    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.93, y=0.985, fontsize=10)
 
     fig.tight_layout()
     return fig
@@ -147,13 +154,14 @@ def write_daily_overview_fig(inputfilepath, outputfilepath):
     closefig()
 
 
-def set_time_axis(ax):
+def set_time_axis(ax, df):
     ax.xaxis.set_minor_locator(AutoMinorLocator(4))
     ax.xaxis.set_major_locator(hours)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
+    ax.set_xlim(df["datetime"].iloc[0], df["datetime"].iloc[-1])
 
 
-def plot_power(ax, df):
+def plot_power_log(ax, df):
     """Energy production and consumption"""
 
     ax.plot(df["datetime"], df["SMATripower_pgenerate"], label="Erzeugung", lw=1, color="green")
@@ -168,6 +176,33 @@ def plot_power(ax, df):
     ax.plot(df["datetime"], df["VitocalOpen3E_CurrentElectricalPowerConsumptionSystem"], label="Wärmepumpe", lw=1, color="blue")
     
 
+    
+    set_time_axis(ax, df)
+
+    #ax.yaxis.set_major_locator(MultipleLocator(5))
+    #ax.yaxis.set_minor_locator(MultipleLocator(1))
+    ax.legend(loc="upper left")
+    ax.grid(which="major", axis="x")
+    ax.grid(which="both", axis="y", lw=0.5)
+    ax.set_ylim(80, 8000)
+    ax.set_ylabel('Leistung in W')
+    ax.set_yscale("log")
+
+def plot_power(ax, df):
+    """Energy production and consumption"""
+
+    #ax.plot(df["datetime"], df["SMATripower_pgenerate"], label="Erzeugung", lw=1, color="green")
+    
+    ax.plot(df["datetime"], df["SMATripower_psupply"], label="Einspeisung", color="orange", lw=0.5)
+    ax.fill_between(df["datetime"], df["SMATripower_psupply"], 0, color="orange", alpha=0.2)
+    #ax.plot(df["datetime"], df["SMAHomeManager_psupply"], label="SMAHomeManager_psupply")
+     
+    ax.plot(df["datetime"], df["SMATripower_ppurchase"], label="Kauf", lw=0.5, color="red")
+    ax.fill_between(df["datetime"], df["SMATripower_ppurchase"], 0, color="red", alpha=0.2)
+    #ax.plot(df["datetime"], df["SMAHomeManager_ppurchase"], label="SMAHomeManager_ppurchase")
+
+    #ax.plot(df["datetime"], df["VitocalOpen3E_CurrentElectricalPowerConsumptionSystem"], label="Wärmepumpe", lw=1, color="blue")
+    
     # Write energy on fig
     epurchase = df["SMATripower_epurchase"][len(df)-1] - df["SMATripower_epurchase"][0]
     esupply = df["SMATripower_esupply"][len(df)-1] - df["SMATripower_esupply"][0]
@@ -179,16 +214,66 @@ def plot_power(ax, df):
     ax.text(0.85, 0.95, textstr, transform=ax.transAxes, fontsize=8,
         verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
     
-    set_time_axis(ax)
+    set_time_axis(ax, df)
 
     #ax.yaxis.set_major_locator(MultipleLocator(5))
     #ax.yaxis.set_minor_locator(MultipleLocator(1))
     ax.legend(loc="upper left")
     ax.grid(which="major", axis="x")
     ax.grid(which="both", axis="y", lw=0.5)
-    ax.set_ylim(80, 8000)
+    ax.set_ylim(0, 5000)
     ax.set_ylabel('Leistung in W')
-    ax.set_yscale("log")
+
+
+    # Now the processing of peaks
+    detect_power = 800
+    #ax.axhline(detect_power, color="lightgray", dashes=(2,5))
+    #baseline_power = 250
+    
+    power = df["SMATripower_ppurchase"]
+    energy = df["SMATripower_epurchase"]
+
+    peaks = []
+    inpeak = False
+
+    # Now the ugly loop
+
+    for i in range(1, len(power)): # we skip the first
+        
+        if power.iloc[i] > detect_power:
+            if not inpeak: # We start a peak
+                inpeak = True # Note that the "if" below will run to take this energy in account for the peak
+                peak = {"energy":0, "starti":i-1}
+            #if inpeak: # We accumulate energy
+            #   extra_power = power.iloc[i] - baseline_power
+            #   peak["energy"] += extra_power * ( seconds / 3600 )
+            #   nonpeak_energy += baseline_power * ( seconds / 3600 )
+
+        else:
+            if inpeak:
+                # We finalize the peak
+                inpeak = False # Note that the "if" below will run to count this interval behind the last peak as non_peak energy
+                peak["endi"] = i-1
+                peak["energy"] = energy.iloc[peak["endi"]] - energy.iloc[peak["starti"]]
+                peaks.append(peak)
+            
+
+    
+    labelypos = [2000, 3000]
+    textcolor="black"
+    
+    for (i, peak) in enumerate(peaks):
+        #print(peak)
+        
+        if peak["energy"] < 0.4 or np.isnan(peak["energy"]):
+            continue
+        ax.axvline(df.datetime.iloc[peak["starti"]], color="lightgray")
+        ax.axvline(df.datetime.iloc[peak["endi"]], color="lightgray")
+        centeri = int((peak["starti"] + peak["endi"]) / 2)
+        ax.text(df.datetime.iloc[centeri], labelypos[i % 2], f"{peak['energy']:.1f} kWh",
+            horizontalalignment='center', color=textcolor, rotation=90, fontsize=7)
+    
+
 
 
 def plot_heat_temps(ax, df):
@@ -200,18 +285,72 @@ def plot_heat_temps(ax, df):
     ax.plot(df["datetime"], df["VitocalOpen3E_AllengraSensor_Temperature"], label="Allengra Temp", lw=1, color="purple")
     
     # SG-Ready
-    ax.fill_between(df["datetime"], 0, 1, where = df["VitocalOpen3E_SmartGridReadyConsolidator_OperatingStatus"]  > 2,
-                color='grey', alpha=0.2, transform=ax.get_xaxis_transform())
+    ax.fill_between(df["datetime"], 0.82, 0.98, where = df["VitocalOpen3E_SmartGridReadyConsolidator_OperatingStatus"]  > 2,
+                color='green', alpha=0.2, transform=ax.get_xaxis_transform())
+    # DHW heating
+    ax.fill_between(df["datetime"], 0.62, 0.78, where = df["VitocalOpen3E_FourThreeWayValveValveCurrentPosition"] == 2,
+                color='blue', alpha=0.2, transform=ax.get_xaxis_transform())
+    # Heizkreis heating
+    ax.fill_between(df["datetime"], 0.62, 0.78, where = df["VitocalOpen3E_FourThreeWayValveValveCurrentPosition"] == 0,
+                color='red', alpha=0.2, transform=ax.get_xaxis_transform())
 
-
-    set_time_axis(ax)
+    set_time_axis(ax, df)
 
     #ax.yaxis.set_major_locator(MultipleLocator(5))
     #ax.yaxis.set_minor_locator(MultipleLocator(1))
     ax.legend(loc="upper left")
     ax.grid(which="major")
-   
+    ax.set_ylim(18, 65)
+    ax.set_ylabel('Temperatur in °C')
 
+    # Add Text with number of compressor starts
+    starts = df["VitocalOpen3E_HeatPumpCompressorStatistical_starts"]
+    nstarts = int(starts[len(df)-1] - starts[0])
+    ax.text(0.85, 0.95, f'Kompressorstarts: {nstarts}', transform=ax.transAxes, fontsize=8,
+        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+
+
+
+def plot_indoor(ax, df):
+    """Indoor conditions"""
+
+    ax.plot(df["datetime"], df["WohnzimmerUhr_temperature"], label="Wohnzimmer", color="blue", ls='-', marker="None")
+    
+    ax.set_ylim(18, 22)
+    ax.yaxis.set_major_locator(MultipleLocator(1))
+    ax.yaxis.set_minor_locator(MultipleLocator(0.5))
+    ax.set_ylabel('Temperatur in °C')
+
+    twinax = ax.twinx()
+    twinax.plot(df["datetime"], df["WohnzimmerUhr_humidity"], label="Wohnzimmer", color="blue", ls=':', marker="None")
+    twinax.set_ylabel('Luftfeuchtigkeit in %', color="red")
+    twinax.set_ylim(40, 75)
+
+    set_time_axis(twinax, df)
+    ax.legend(loc="upper left")
+    ax.grid(which="major")
+
+def plot_outdoor(ax, df):
+    ax.plot(df["datetime"], df["VitocalOpen3E_OutsideTemperatureSensor_Actual"], label="Balkon", color="green", ls='-', marker="None")
+    
+    #ax.set_ylim(18, 22)
+    ax.yaxis.set_major_locator(MultipleLocator(2))
+    #ax.yaxis.set_minor_locator(MultipleLocator(1))
+    ax.set_ylabel('Temperatur in °C')
+    
+    # Add Text with min and max temps
+    temps = df["VitocalOpen3E_OutsideTemperatureSensor_Actual"]
+    textstr = '\n'.join((
+        f'Min: {np.min(temps):.0f} °C',
+        f'Max: {np.max(temps):.0f} °C'
+        ))
+    ax.text(0.85, 0.95, textstr, transform=ax.transAxes, fontsize=8,
+        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+
+
+    set_time_axis(ax, df)
+    ax.legend(loc="upper left")
+    ax.grid(which="major")
 
 def plot_explore(ax, df):
 
@@ -219,117 +358,117 @@ def plot_explore(ax, df):
     ax.plot(df["datetime"], df["VitocalOpen3E_AllengraSensor_Actual"], label="Allengra", lw=1, color="red")
     ax.plot(df["datetime"], df["VitocalOpen3E_SmartGridReadyConsolidator_OperatingStatus"], label="SG", lw=1, color="green")
      
-    set_time_axis(ax)
+    set_time_axis(ax, df)
 
     ax.legend(loc="upper left")
     ax.grid(which="major")
    
 
-def plot_out(ax, dfs):
-    """Outdoor conditions"""
+# def plot_out(ax, dfs):
+#     """Outdoor conditions"""
 
-    for name in ["S2"]:
-        if len(dfs[name]) == 0: return
+#     for name in ["S2"]:
+#         if len(dfs[name]) == 0: return
     
-    ax.plot(dfs["S2"].datetime, dfs["S2"].temp, label="Temperatur °C", color="forestgreen")
+#     ax.plot(dfs["S2"].datetime, dfs["S2"].temp, label="Temperatur °C", color="forestgreen")
    
 
-    ax.set_ylim(-10, 35)
-    ax.axhline(y=0, xmin=0, xmax=1, lw=2, color="black", ls="--")
-    ax.set_ylabel("Temperatur °C", color="forestgreen")
-    ax.xaxis.set_minor_locator(hours)
-    ax.yaxis.set_major_locator(MultipleLocator(5))
-    ax.yaxis.set_minor_locator(MultipleLocator(1))
-    #ax.legend(loc="upper left")
-    ax.text(0.5, 0.96, 'Außen', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
-    ax.grid(which="both")
+#     ax.set_ylim(-10, 35)
+#     ax.axhline(y=0, xmin=0, xmax=1, lw=2, color="black", ls="--")
+#     ax.set_ylabel("Temperatur °C", color="forestgreen")
+#     ax.xaxis.set_minor_locator(hours)
+#     ax.yaxis.set_major_locator(MultipleLocator(5))
+#     ax.yaxis.set_minor_locator(MultipleLocator(1))
+#     #ax.legend(loc="upper left")
+#     ax.text(0.5, 0.96, 'Außen', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
+#     ax.grid(which="both")
    
 
-    twinax = ax.twinx()
-    twinax.plot(dfs["uhr"].datetime, dfs["uhr"].pres, label="Uhr Luftdruck hPa", color="peru")
-    twinax.set_ylabel('Luftdruck in hPa', color="peru")
-    twinax.set_ylim(980, 1020)
+#     twinax = ax.twinx()
+#     twinax.plot(dfs["uhr"].datetime, dfs["uhr"].pres, label="Uhr Luftdruck hPa", color="peru")
+#     twinax.set_ylabel('Luftdruck in hPa', color="peru")
+#     twinax.set_ylim(980, 1020)
 
-    twinax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+#     twinax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
     
 
 
-def plot_heiz(ax, dfs):
-    """Heizung stuff"""
-    df = dfs["heiz"]
-    if len(df) == 0: return
+# def plot_heiz(ax, dfs):
+#     """Heizung stuff"""
+#     df = dfs["heiz"]
+#     if len(df) == 0: return
 
-    ax.plot(df.datetime, df.temp, label="Heizung Vorlauf °C", color="darkorange")
-    ax.yaxis.set_minor_locator(MultipleLocator(5))
-    ax.axhline(y=50, xmin=0, xmax=1, lw=2, ls="--", color="orange")
-    ax.set_ylim(15, 70)
-    ax.set_ylabel('Vorlauftemperatur in °C', color="darkorange")
-    #ax.set_xlabel("UTC") # No, should now be with timezone...
+#     ax.plot(df.datetime, df.temp, label="Heizung Vorlauf °C", color="darkorange")
+#     ax.yaxis.set_minor_locator(MultipleLocator(5))
+#     ax.axhline(y=50, xmin=0, xmax=1, lw=2, ls="--", color="orange")
+#     ax.set_ylim(15, 70)
+#     ax.set_ylabel('Vorlauftemperatur in °C', color="darkorange")
+#     #ax.set_xlabel("UTC") # No, should now be with timezone...
 
-    ax.text(0.5, 0.96, 'Heizung', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
-    ax.xaxis.set_minor_locator(hours)
-    #ax.legend(loc="upper left")
-    ax.grid(which="both")
+#     ax.text(0.5, 0.96, 'Heizung', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
+#     ax.xaxis.set_minor_locator(hours)
+#     #ax.legend(loc="upper left")
+#     ax.grid(which="both")
 
-    twinax = ax.twinx()
-    twinax.plot(df.datetime, df.micmag, label="Heizung Schall RMS", color="darkgrey", lw=0.5)
-    twinax.set_ylabel('Schall RMS', color="darkgrey")
-    twinax.set_ylim(40, 80)
+#     twinax = ax.twinx()
+#     twinax.plot(df.datetime, df.micmag, label="Heizung Schall RMS", color="darkgrey", lw=0.5)
+#     twinax.set_ylabel('Schall RMS', color="darkgrey")
+#     twinax.set_ylim(40, 80)
 
     
 
-    twinax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+#     twinax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
 
 
 
-def plot_in(ax, dfs):
-    """Indoor temperatur"""
-    for name in ["wecker", "uhr"]:
-        if len(dfs[name]) == 0: return
+# def plot_in(ax, dfs):
+#     """Indoor temperatur"""
+#     for name in ["wecker", "uhr"]:
+#         if len(dfs[name]) == 0: return
    
     
-    ax.plot(dfs["uhr"].datetime, dfs["uhr"].temp, label="Wohnzimmer", color="deepskyblue")
-    ax.plot(dfs["wecker"].datetime, dfs["wecker"].temp, label="Schlafzimmer", color="black", ls="None", marker='.')
-    ax.set_ylim(17, 22)
-    ax.yaxis.set_major_locator(MultipleLocator(1))
-    #ax.yaxis.set_minor_locator(MultipleLocator(1))
-    ax.set_ylabel('Temperatur in °C')
-    ax.xaxis.set_minor_locator(hours)
-    ax.legend(loc="upper left")
-    ax.text(0.5, 0.96, 'Innen', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
-    ax.grid(which="both")
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+#     ax.plot(dfs["uhr"].datetime, dfs["uhr"].temp, label="Wohnzimmer", color="deepskyblue")
+#     ax.plot(dfs["wecker"].datetime, dfs["wecker"].temp, label="Schlafzimmer", color="black", ls="None", marker='.')
+#     ax.set_ylim(17, 22)
+#     ax.yaxis.set_major_locator(MultipleLocator(1))
+#     #ax.yaxis.set_minor_locator(MultipleLocator(1))
+#     ax.set_ylabel('Temperatur in °C')
+#     ax.xaxis.set_minor_locator(hours)
+#     ax.legend(loc="upper left")
+#     ax.text(0.5, 0.96, 'Innen', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
+#     ax.grid(which="both")
+#     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
 
 
-def plot_humq(ax, dfs):
-    """air quality"""
+# def plot_humq(ax, dfs):
+#     """air quality"""
 
-    for name in ["S2", "wecker", "uhr"]:
-        if len(dfs[name]) == 0: return
+#     for name in ["S2", "wecker", "uhr"]:
+#         if len(dfs[name]) == 0: return
    
     
     
-    ax.plot(dfs["uhr"].datetime, dfs["uhr"].hum, label="Wohnzimmer", color="deepskyblue")
-    ax.plot(dfs["wecker"].datetime, dfs["wecker"].hum, label="Schlafzimmer", color="black", ls="None", marker='.')
-    ax.plot(dfs["S2"].datetime, dfs["S2"].hum, label="Außen", color="forestgreen")
-    ax.set_ylabel('Relative Luftfeuchtigkeit in %')
-    ax.axhline(y=75, xmin=0, xmax=1, lw=2, ls="--", color="black")
-    ax.set_ylim(40, 100)
-    ax.yaxis.set_major_locator(MultipleLocator(5))
-    ax.yaxis.set_minor_locator(MultipleLocator(1))
+#     ax.plot(dfs["uhr"].datetime, dfs["uhr"].hum, label="Wohnzimmer", color="deepskyblue")
+#     ax.plot(dfs["wecker"].datetime, dfs["wecker"].hum, label="Schlafzimmer", color="black", ls="None", marker='.')
+#     ax.plot(dfs["S2"].datetime, dfs["S2"].hum, label="Außen", color="forestgreen")
+#     ax.set_ylabel('Relative Luftfeuchtigkeit in %')
+#     ax.axhline(y=75, xmin=0, xmax=1, lw=2, ls="--", color="black")
+#     ax.set_ylim(40, 100)
+#     ax.yaxis.set_major_locator(MultipleLocator(5))
+#     ax.yaxis.set_minor_locator(MultipleLocator(1))
 
-    ax.xaxis.set_minor_locator(hours)
-    ax.legend(loc="upper left")
-    ax.text(0.5, 0.96, 'Luftqualität', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
-    ax.grid(which="major")
+#     ax.xaxis.set_minor_locator(hours)
+#     ax.legend(loc="upper left")
+#     ax.text(0.5, 0.96, 'Luftqualität', verticalalignment='top', horizontalalignment='center', transform=ax.transAxes, fontsize=15)
+#     ax.grid(which="major")
     
 
-    twinax = ax.twinx()
-    twinax.plot(dfs["wecker"].datetime, dfs["wecker"].gas/100.0, label="Schlafzimmer Q Ohm", color="hotpink", ls="None", marker='.')
-    twinax.set_ylabel('Schlafzimmer Q in Ohm', color="hotpink")
-    twinax.set_ylim(50, 200)
+#     twinax = ax.twinx()
+#     twinax.plot(dfs["wecker"].datetime, dfs["wecker"].gas/100.0, label="Schlafzimmer Q Ohm", color="hotpink", ls="None", marker='.')
+#     twinax.set_ylabel('Schlafzimmer Q in Ohm', color="hotpink")
+#     twinax.set_ylim(50, 200)
     
-    twinax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+#     twinax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
 
 
 
@@ -547,12 +686,23 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     parser = OptionParser()
 
-    parser.add_option("-t", action="append", type="string", dest="todolist", default=None)
-    parser.add_option("-f", "--file", action="store", type="string", dest="filename", default=None)
+    #parser.add_option("-t", action="append", type="string", dest="todolist", default=None)
+    parser.add_option("-i", "--input", action="store", type="string", dest="infilename", default=None)
+    parser.add_option("-o", "--output", action="store", type="string", dest="outfilename", default=None)
+
 
     (options, args) = parser.parse_args()
+    options = vars(options)
 
     logging.info(options)
+
+
+    # source /home/mtewes/pvpi-venv/bin/activate
+    # python plotting.py -i /home/mtewes/data/pvpi/2025/2025-10-25.csv -o test.pdf
+
+    write_daily_overview_fig(options["infilename"], options["outfilename"])
+
+
 
     """
     if "y" in options.todolist:
@@ -569,7 +719,7 @@ if __name__ == '__main__':
     attachment_file_path = make_plot(yesterday)
     """
     
-    write_daily_overview_fig("/home/mtewes/data/pvpi/2025/2025-01-03.csv", "/home/mtewes/test.pdf")
+    
 
 
 """
