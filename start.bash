@@ -42,6 +42,13 @@ exec bash'
 sleep 2
 echo "mail"
 
+screen -S controlrelay -dm bash -c 'cd /home/mtewes/pvpi;
+source /home/mtewes/pvpi-venv/bin/activate;
+python run_control_relay.py;
+exec bash'
+sleep 2
+echo "controlrelay"
+
 
 echo "Started."
 

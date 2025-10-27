@@ -186,7 +186,8 @@ def main():
                 if elapsed_met >= timedelta(minutes=30):
                     # Switch on relay 1
                     if chan1.value == 0:
-                        chan1.on()
+                        pass
+                        #chan1.on()
             
             else: # Conditions are NOT met right now
 
