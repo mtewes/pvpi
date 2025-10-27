@@ -108,18 +108,18 @@ def create_overview_fig(df, suptitle=None):
     #fig = plt.figure(figsize=(30,25), dpi=100) # (w, h)
     #fig = plt.figure(figsize=(15,12), dpi=200) # (w, h) # For subplots(4, 1)
     #fig = plt.figure(figsize=(10,10), dpi=200) # (w, h) # For subplots(4, 1)
-    fig = plt.figure(figsize=(12,11)) # (w, h) # For subplots(5, 1)
+    fig = plt.figure(figsize=(12,13)) # (w, h) # For subplots(5, 1)
 
     
-    axes = fig.subplots(5, 1)
+    axes = fig.subplots(6, 1)
     plot_power_log(axes[0], df)
     plot_power(axes[1], df)
     plot_heat_temps(axes[2], df)
     plot_indoor(axes[3], df)
     plot_outdoor(axes[4], df)
-    #plot_explore(axes[3], df)
+    plot_explore(axes[5], df)
 
-    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.93, y=0.985, fontsize=10)
+    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.92, y=0.987, fontsize=10)
 
     fig.tight_layout()
     return fig
@@ -238,12 +238,12 @@ def plot_power(ax, df):
 
     # Now the ugly loop
 
-    for i in range(1, len(power)): # we skip the first
+    for i in range(1, len(power)-1): # we skip the first
         
         if power.iloc[i] > detect_power:
             if not inpeak: # We start a peak
                 inpeak = True # Note that the "if" below will run to take this energy in account for the peak
-                peak = {"energy":0, "starti":i-1}
+                peak = {"energy":0, "starti":i}
             #if inpeak: # We accumulate energy
             #   extra_power = power.iloc[i] - baseline_power
             #   peak["energy"] += extra_power * ( seconds / 3600 )
@@ -255,23 +255,20 @@ def plot_power(ax, df):
                 inpeak = False # Note that the "if" below will run to count this interval behind the last peak as non_peak energy
                 peak["endi"] = i-1
                 peak["energy"] = energy.iloc[peak["endi"]] - energy.iloc[peak["starti"]]
-                peaks.append(peak)
+
+                if peak["energy"] < 0.5: #  or np.isnan(peak["energy"]):
+                    peaks.append(peak)
             
 
-    
-    labelypos = [2000, 3000]
-    textcolor="black"
+    labelypos = [2000, 3000] # Alternating heights, to avoid overlap
     
     for (i, peak) in enumerate(peaks):
         #print(peak)
-        
-        if peak["energy"] < 0.4 or np.isnan(peak["energy"]):
-            continue
-        ax.axvline(df.datetime.iloc[peak["starti"]], color="lightgray")
-        ax.axvline(df.datetime.iloc[peak["endi"]], color="lightgray")
+        ax.axvline(df.datetime.iloc[peak["starti"]], color="black", zorder=-100)
+        ax.axvline(df.datetime.iloc[peak["endi"]], color="black", zorder=-100)
         centeri = int((peak["starti"] + peak["endi"]) / 2)
         ax.text(df.datetime.iloc[centeri], labelypos[i % 2], f"{peak['energy']:.1f} kWh",
-            horizontalalignment='center', color=textcolor, rotation=90, fontsize=7)
+            horizontalalignment='center', color="black", rotation=90, fontsize=7)
     
 
 
@@ -282,7 +279,7 @@ def plot_heat_temps(ax, df):
     ax.plot(df["datetime"], df["VitocalOpen3E_DomesticHotWaterSensor_Actual"], label="WW", lw=1, color="red")
     ax.plot(df["datetime"], df["VitocalOpen3E_ReturnTemperatureSensor_Actual"], label="Return", lw=1, color="blue")
     ax.plot(df["datetime"], df["VitocalOpen3E_FlowTemperatureSensor_Actual"], label="Flow", lw=1, color="orange")
-    ax.plot(df["datetime"], df["VitocalOpen3E_AllengraSensor_Temperature"], label="Allengra Temp", lw=1, color="purple")
+    #ax.plot(df["datetime"], df["VitocalOpen3E_AllengraSensor_Temperature"], label="Allengra Temp", lw=1, color="purple")
     
     # SG-Ready
     ax.fill_between(df["datetime"], 0.82, 0.98, where = df["VitocalOpen3E_SmartGridReadyConsolidator_OperatingStatus"]  > 2,
@@ -309,6 +306,11 @@ def plot_heat_temps(ax, df):
     ax.text(0.85, 0.95, f'Kompressorstarts: {nstarts}', transform=ax.transAxes, fontsize=8,
         verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
 
+    # Text with start and end temperature of DHW
+    
+    ax.text(0.80, 0.85, f'WW Verlauf: {df["VitocalOpen3E_DomesticHotWaterSensor_Actual"].iloc[0]:.1f} -> {df["VitocalOpen3E_DomesticHotWaterSensor_Actual"].iloc[-1]:.1f} °C', transform=ax.transAxes, fontsize=8,
+        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+
 
 
 def plot_indoor(ax, df):
@@ -331,9 +333,10 @@ def plot_indoor(ax, df):
     ax.grid(which="major")
 
 def plot_outdoor(ax, df):
-    ax.plot(df["datetime"], df["VitocalOpen3E_OutsideTemperatureSensor_Actual"], label="Balkon", color="green", ls='-', marker="None")
+    ax.plot(df["datetime"], df["VitocalOpen3E_OutsideTemperatureSensor_Actual"], label="Fühler Heizung Balkon", color="green", ls='-', marker="None")
     
-    #ax.set_ylim(18, 22)
+    ax.set_ylim(-10, 20)
+    ax.axhline(y=0, xmin=0, xmax=1, lw=2, color="black", ls="--")
     ax.yaxis.set_major_locator(MultipleLocator(2))
     #ax.yaxis.set_minor_locator(MultipleLocator(1))
     ax.set_ylabel('Temperatur in °C')
@@ -355,10 +358,18 @@ def plot_outdoor(ax, df):
 def plot_explore(ax, df):
 
     
-    ax.plot(df["datetime"], df["VitocalOpen3E_AllengraSensor_Actual"], label="Allengra", lw=1, color="red")
-    ax.plot(df["datetime"], df["VitocalOpen3E_SmartGridReadyConsolidator_OperatingStatus"], label="SG", lw=1, color="green")
-     
+    #ax.plot(df["datetime"], df["VitocalOpen3E_AllengraSensor_Actual"], label="Allengra", lw=1, color="red")
+    #ax.plot(df["datetime"], df["VitocalOpen3E_SmartGridReadyConsolidator_OperatingStatus"], label="SG", lw=1, color="green")
+    
+    ax.plot(df["datetime"], df["SMAHomeManager_v1"], label="Phase 1", lw=0.5, color="red")
+    ax.plot(df["datetime"], df["SMAHomeManager_v2"], label="Phase 2", lw=0.5, color="green")
+    ax.plot(df["datetime"], df["SMAHomeManager_v3"], label="Phase 3", lw=0.5, color="blue")
+
+
     set_time_axis(ax, df)
+    ax.set_ylim(225, 235)
+    ax.set_ylabel('SMAHomeManager Netzspannung in V')
+    
 
     ax.legend(loc="upper left")
     ax.grid(which="major")
@@ -472,176 +483,176 @@ def plot_explore(ax, df):
 
 
 
-def write_daily_strom_fig(datestr=None, filepath=None, workdir="/home/pi/Databases/strom_figs"):
-    """
-    use datestr = None to read yesterday from sqlite dbs
-    use datestr = "2012-12-05" to read from csv files
+# def write_daily_strom_fig(datestr=None, filepath=None, workdir="/home/pi/Databases/strom_figs"):
+#     """
+#     use datestr = None to read yesterday from sqlite dbs
+#     use datestr = "2012-12-05" to read from csv files
 
-    use filepath = None to save to default location, in workdir
-    """
+#     use filepath = None to save to default location, in workdir
+#     """
 
-    if datestr is None:
-        dfs = getdfs(["strom"], mode="yesterday")
-    else:
-        dfs = getdfs_csv(["strom"], datestr, workdir="/home/pi/Databases")
+#     if datestr is None:
+#         dfs = getdfs(["strom"], mode="yesterday")
+#     else:
+#         dfs = getdfs_csv(["strom"], datestr, workdir="/home/pi/Databases")
     
-    # Check if we have all data
-    if dfs["strom"] is None:
-        logger.warning("Data does not exist, skipping figure creation")
-        return
+#     # Check if we have all data
+#     if dfs["strom"] is None:
+#         logger.warning("Data does not exist, skipping figure creation")
+#         return
     
-    suptitle = dfs["strom"].datetime[int(len(dfs["strom"].datetime)/2)].strftime('%Y-%m-%d') # datetime from central point
+#     suptitle = dfs["strom"].datetime[int(len(dfs["strom"].datetime)/2)].strftime('%Y-%m-%d') # datetime from central point
     
-    if filepath is None: # Then we create a default one
-        os.makedirs(workdir, exist_ok=True)
-        filepath = suptitle + ".png"
-        filepath = os.path.join(workdir, filepath)
+#     if filepath is None: # Then we create a default one
+#         os.makedirs(workdir, exist_ok=True)
+#         filepath = suptitle + ".png"
+#         filepath = os.path.join(workdir, filepath)
 
 
-    fig = create_strom_fig(nhours=None, suptitle=suptitle, dfs=dfs)
-    fig.savefig(filepath)
-    logger.info("Wrote strom fig to {}".format(filepath))
+#     fig = create_strom_fig(nhours=None, suptitle=suptitle, dfs=dfs)
+#     fig.savefig(filepath)
+#     logger.info("Wrote strom fig to {}".format(filepath))
 
-    closefig()
+#     closefig()
 
-def create_strom_fig(nhours=None, mode=None, dfs=None, suptitle=None):
+# def create_strom_fig(nhours=None, mode=None, dfs=None, suptitle=None):
 
-    logger.info("Creating figure...")
-    if dfs is None:
-        dfs = getdfs(["strom"], nhours=nhours, mode=mode)
+#     logger.info("Creating figure...")
+#     if dfs is None:
+#         dfs = getdfs(["strom"], nhours=nhours, mode=mode)
     
-    #fig = plt.figure(figsize=(30,25), dpi=100) # (w, h)
-    fig = plt.figure(figsize=(20,5), dpi=200) # (w, h)
+#     #fig = plt.figure(figsize=(30,25), dpi=100) # (w, h)
+#     fig = plt.figure(figsize=(20,5), dpi=200) # (w, h)
     
-    (ax) = fig.subplots(1, 1)
-    plot_strom(ax, dfs)
+#     (ax) = fig.subplots(1, 1)
+#     plot_strom(ax, dfs)
     
-    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.95, y=0.95, fontsize=20)
-    fig.tight_layout()
-    return fig
+#     fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.95, y=0.95, fontsize=20)
+#     fig.tight_layout()
+#     return fig
 
-def plot_strom(ax, dfs, epaper=False):
-    """stromverbrauch"""
+# def plot_strom(ax, dfs, epaper=False):
+#     """stromverbrauch"""
 
-    df = dfs["strom"]
-    if len(df) == 0: return
-    logger.info("Got {} original records".format(len(df)))
+#     df = dfs["strom"]
+#     if len(df) == 0: return
+#     logger.info("Got {} original records".format(len(df)))
 
-    # Kick rows closing an original interval that is very narrow
-    # No longer needed, now that we limit frequency of logs at the sensor level
-    #df["seconds_prev_origint"] = (df['datetime'] - df['datetime'].shift(1)).dt.total_seconds()
-    #df.drop(df[df.seconds_prev_origint < 60].index, inplace=True)
-    #logger.info("After purge, keeping {} records".format(len(df)))
+#     # Kick rows closing an original interval that is very narrow
+#     # No longer needed, now that we limit frequency of logs at the sensor level
+#     #df["seconds_prev_origint"] = (df['datetime'] - df['datetime'].shift(1)).dt.total_seconds()
+#     #df.drop(df[df.seconds_prev_origint < 60].index, inplace=True)
+#     #logger.info("After purge, keeping {} records".format(len(df)))
 
-    # Compute number of Rotations in ending interval (i.e., interval right before this datetime)
-    df["diffcount_ending_int"] = df['count'] - df['count'].shift(1) # Is 1 if no records are missing, but may also be 2, 3,...
+#     # Compute number of Rotations in ending interval (i.e., interval right before this datetime)
+#     df["diffcount_ending_int"] = df['count'] - df['count'].shift(1) # Is 1 if no records are missing, but may also be 2, 3,...
     
-    # If negative or zero (due to reset of sensor), set it to 1 after showing it as vertical line
-    reset_mask = df["diffcount_ending_int"] <= 0
-    for i in range(1, len(reset_mask)): # we skip the first
-        if reset_mask.iloc[i] == True:
-            ax.axvline(df.datetime.iloc[i], color="red", linewidth=3)
-    df["diffcount_ending_int"] = df["diffcount_ending_int"].clip(lower=1, upper=None)
+#     # If negative or zero (due to reset of sensor), set it to 1 after showing it as vertical line
+#     reset_mask = df["diffcount_ending_int"] <= 0
+#     for i in range(1, len(reset_mask)): # we skip the first
+#         if reset_mask.iloc[i] == True:
+#             ax.axvline(df.datetime.iloc[i], color="red", linewidth=3)
+#     df["diffcount_ending_int"] = df["diffcount_ending_int"].clip(lower=1, upper=None)
     
-    # Compute duration of ending interval:
-    df["seconds_ending_int"] = (df['datetime'] - df['datetime'].shift(1)).dt.total_seconds()
+#     # Compute duration of ending interval:
+#     df["seconds_ending_int"] = (df['datetime'] - df['datetime'].shift(1)).dt.total_seconds()
     
-    # Compute energy of ending interval, in Wh
-    # 75 U / kWh -> 1 count is (1000/75) Wh
-    df["energy_ending_int"] = df["diffcount_ending_int"] * (1000./75)
+#     # Compute energy of ending interval, in Wh
+#     # 75 U / kWh -> 1 count is (1000/75) Wh
+#     df["energy_ending_int"] = df["diffcount_ending_int"] * (1000./75)
 
-    total_energy = df["energy_ending_int"].sum()
-    if not epaper:
-        ax.text(0, 1, "\n Gesamt: {:.1f} Wh".format(total_energy),
-            horizontalalignment='left',
-            verticalalignment='top',
-            fontsize=15,
-            transform=ax.transAxes)
+#     total_energy = df["energy_ending_int"].sum()
+#     if not epaper:
+#         ax.text(0, 1, "\n Gesamt: {:.1f} Wh".format(total_energy),
+#             horizontalalignment='left',
+#             verticalalignment='top',
+#             fontsize=15,
+#             transform=ax.transAxes)
 
-    # Average power in W of ending interval:
-    df["power_ending_int"] = df["diffcount_ending_int"] * (1000./75) / ( df["seconds_ending_int"] / 3600 )
+#     # Average power in W of ending interval:
+#     df["power_ending_int"] = df["diffcount_ending_int"] * (1000./75) / ( df["seconds_ending_int"] / 3600 )
     
-    # And the actual plot
+#     # And the actual plot
 
-    # Works only with recent Matplotlib:
-    #ax.stairs(df.power_ending_int[1:], df.datetime, label="Leistung", color="black")
-    # Older Matplotlibs:
-    lw = 1.0
-    color = "black"
-    if epaper:
-        lw=1.0
-        color="red"
-    ax.step(df.datetime, df.power_ending_int, where="pre", label="Leistung", color=color, lw=lw)
-    #ax.fill_between(df.datetime, df.power_ending_int, y2=50, where="pre", interpolate=False, step=None, facecolor=color, lw=0)
+#     # Works only with recent Matplotlib:
+#     #ax.stairs(df.power_ending_int[1:], df.datetime, label="Leistung", color="black")
+#     # Older Matplotlibs:
+#     lw = 1.0
+#     color = "black"
+#     if epaper:
+#         lw=1.0
+#         color="red"
+#     ax.step(df.datetime, df.power_ending_int, where="pre", label="Leistung", color=color, lw=lw)
+#     #ax.fill_between(df.datetime, df.power_ending_int, y2=50, where="pre", interpolate=False, step=None, facecolor=color, lw=0)
     
-    ax.set_ylim(50, 5000)
-    if not epaper:
-        ax.set_ylabel('Leistung in W')
-    ax.set_yscale("log")
-    #ax.plot(df.datetime, df.dip_duration)
-    #ax.set_ylim(0, 5)
+#     ax.set_ylim(50, 5000)
+#     if not epaper:
+#         ax.set_ylabel('Leistung in W')
+#     ax.set_yscale("log")
+#     #ax.plot(df.datetime, df.dip_duration)
+#     #ax.set_ylim(0, 5)
     
-    #print(df.datetime[1:])
-    #print(df.power_prev_int)
-    ax.xaxis.set_minor_locator(hours)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+#     #print(df.datetime[1:])
+#     #print(df.power_prev_int)
+#     ax.xaxis.set_minor_locator(hours)
+#     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
 
-    if epaper:
-        #ax.set_xticklabels(ax.get_xticks(), rotation=45)
-        for tick in ax.get_xticklabels():
-            tick.set_rotation(60)
+#     if epaper:
+#         #ax.set_xticklabels(ax.get_xticks(), rotation=45)
+#         for tick in ax.get_xticklabels():
+#             tick.set_rotation(60)
 
 
-    # Now the processing of peaks
-    detect_power = 500
-    #ax.axhline(detect_power, color="lightgray", dashes=(2,5))
-    baseline_power = 250
+#     # Now the processing of peaks
+#     detect_power = 500
+#     #ax.axhline(detect_power, color="lightgray", dashes=(2,5))
+#     baseline_power = 250
 
-    if not epaper:
-        ax.axhline(baseline_power, color="lightgray", dashes=(5,5))
+#     if not epaper:
+#         ax.axhline(baseline_power, color="lightgray", dashes=(5,5))
     
-    peaks = []
-    inpeak = False
-    nonpeak_energy = 0
+#     peaks = []
+#     inpeak = False
+#     nonpeak_energy = 0
 
-    # Now the ugly loop
+#     # Now the ugly loop
 
-    for i in range(1, len(df["power_ending_int"])): # we skip the first
-        power_ending_int = df["power_ending_int"].iloc[i]
-        seconds = df["seconds_ending_int"].iloc[i]
-        if power_ending_int > detect_power:
-            if not inpeak: # We start a peak
-                inpeak = True # Note that the "if" below will run to take this energy in account for the peak
-                peak = {"energy":0, "starti":i-1}
-            if inpeak: # We accumulate energy
-                extra_power = power_ending_int - baseline_power
-                peak["energy"] += extra_power * ( seconds / 3600 )
-                nonpeak_energy += baseline_power * ( seconds / 3600 )
+#     for i in range(1, len(df["power_ending_int"])): # we skip the first
+#         power_ending_int = df["power_ending_int"].iloc[i]
+#         seconds = df["seconds_ending_int"].iloc[i]
+#         if power_ending_int > detect_power:
+#             if not inpeak: # We start a peak
+#                 inpeak = True # Note that the "if" below will run to take this energy in account for the peak
+#                 peak = {"energy":0, "starti":i-1}
+#             if inpeak: # We accumulate energy
+#                 extra_power = power_ending_int - baseline_power
+#                 peak["energy"] += extra_power * ( seconds / 3600 )
+#                 nonpeak_energy += baseline_power * ( seconds / 3600 )
 
-        else:
-            if inpeak:
-                # We finalize the peak
-                inpeak = False # Note that the "if" below will run to count this interval behind the last peak as non_peak energy
-                peak["endi"] = i-1
-                peaks.append(peak)
-            if not inpeak: # Nothing to do
-                nonpeak_energy += power_ending_int * ( seconds / 3600 )
+#         else:
+#             if inpeak:
+#                 # We finalize the peak
+#                 inpeak = False # Note that the "if" below will run to count this interval behind the last peak as non_peak energy
+#                 peak["endi"] = i-1
+#                 peaks.append(peak)
+#             if not inpeak: # Nothing to do
+#                 nonpeak_energy += power_ending_int * ( seconds / 3600 )
 
     
-    labelypos = [1500, 700]
-    textcolor="red"
-    if epaper:
-        textcolor="black"
-    for (i, peak) in enumerate(peaks):
-        if not epaper:
-            ax.axvline(df.datetime.iloc[peak["starti"]], color="lightgray", dashes=(3, 3))
-            ax.axvline(df.datetime.iloc[peak["endi"]], color="lightgray", dashes=(3, 3))
-        centeri = int((peak["starti"] + peak["endi"]) / 2)
-        ax.text(df.datetime.iloc[centeri], labelypos[i % 2], "{:.0f}".format(peak["energy"]),
-            horizontalalignment='center', fontsize=15, color=textcolor, rotation=90)
+#     labelypos = [1500, 700]
+#     textcolor="red"
+#     if epaper:
+#         textcolor="black"
+#     for (i, peak) in enumerate(peaks):
+#         if not epaper:
+#             ax.axvline(df.datetime.iloc[peak["starti"]], color="lightgray", dashes=(3, 3))
+#             ax.axvline(df.datetime.iloc[peak["endi"]], color="lightgray", dashes=(3, 3))
+#         centeri = int((peak["starti"] + peak["endi"]) / 2)
+#         ax.text(df.datetime.iloc[centeri], labelypos[i % 2], "{:.0f}".format(peak["energy"]),
+#             horizontalalignment='center', fontsize=15, color=textcolor, rotation=90)
     
-    ax.text(df.datetime.iloc[int(len(df)/2)], baseline_power/2, "{:.0f}".format(nonpeak_energy),
-            horizontalalignment='center', fontsize=15, color=textcolor)
+#     ax.text(df.datetime.iloc[int(len(df)/2)], baseline_power/2, "{:.0f}".format(nonpeak_energy),
+#             horizontalalignment='center', fontsize=15, color=textcolor)
     
 
     
