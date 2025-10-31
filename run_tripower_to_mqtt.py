@@ -48,6 +48,9 @@ def read_tripower():
                   "pgenerate":dashvals["6100_0046C200"]["9"][0]["val"],
                   "esupply":dashvals["6400_00462400"]["9"][0]["val"]/1000.0,
                   "epurchase":dashvals["6400_00462500"]["9"][0]["val"]/1000.0,
+                  "mystery1":dashvals["6400_00260100"]["9"][0]["val"]/1000.0,
+                  "mystery2":dashvals["6400_0046C300"]["9"][0]["val"]/1000.0,
+                  "mystery3":dashvals["6800_008AA200"]["9"][0]["val"]/1000.0
                   }
         parsed["pconsume"] = max(parsed["pgenerate"] + parsed["ppurchase"] - parsed["psupply"], 0)
         # This does not work well when the weather is rapidly changing, as these measurements are not simultaneous it seems.
