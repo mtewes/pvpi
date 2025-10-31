@@ -226,12 +226,18 @@ def plot_power(ax, df):
 
 
     # Now the processing of peaks
-    detect_power = 800
+    
     #ax.axhline(detect_power, color="lightgray", dashes=(2,5))
     #baseline_power = 250
     
-    power = df["SMATripower_ppurchase"]
-    energy = df["SMATripower_epurchase"]
+    power = df["SMATripower_ppurchase"] # in W
+    energy = df["SMATripower_epurchase"] # in kWh
+
+    past_power = 0
+    detect_delta_power = 200 # in W
+    peak_end_power = 300 # in W
+    peak_min_energy = 0.2 # in kWh
+    energy_cost = 0.4 # in EUR/kWh
 
     peaks = []
     inpeak = False
@@ -239,36 +245,79 @@ def plot_power(ax, df):
     # Now the ugly loop
 
     for i in range(1, len(power)-1): # we skip the first
-        
-        if power.iloc[i] > detect_power:
-            if not inpeak: # We start a peak
+
+        current_power = power.iloc[i]
+
+        if not inpeak:
+            if current_power - past_power > detect_delta_power:
+                # We start a peak
                 inpeak = True # Note that the "if" below will run to take this energy in account for the peak
-                peak = {"energy":0, "starti":i}
+                peak = {"starti":i, "basepower":past_power, "maxpower":current_power}
+            else:
+                pass
+        
+        else: # we are inpeak
+            
+            if current_power > peak["maxpower"]:
+                peak["maxpower"] = current_power
+
+            peak["endi"] = i-1
+            peak["duration"] = df["datetime"].iloc[peak["endi"]] - df["datetime"].iloc[peak["starti"]]
+
+            if current_power < max(peak["basepower"], peak_end_power): # or past_power - current_power > detect_delta_power:
+                # We finalize the peak
+                inpeak = False
+                
+                peak["fullenergy"] = energy.iloc[peak["endi"]] - energy.iloc[peak["starti"]]
+                peak["baseenergy"] = peak["basepower"]/1000.0 * ( peak["duration"].total_seconds() / 3600.0 )
+                peak["energy"] = peak["fullenergy"] - peak["baseenergy"]
+
+
+                #print(peak)
+                if peak["energy"] > peak_min_energy:
+                    peaks.append(peak)
+                else:
+                    peak = {}
+
+        past_power = current_power
+        
+
+        
+        #if power.iloc[i] > detect_power:
+        #    if not inpeak: # We start a peak
+        #        inpeak = True # Note that the "if" below will run to take this energy in account for the peak
+        #        peak = {"energy":0, "starti":i}
             #if inpeak: # We accumulate energy
             #   extra_power = power.iloc[i] - baseline_power
             #   peak["energy"] += extra_power * ( seconds / 3600 )
             #   nonpeak_energy += baseline_power * ( seconds / 3600 )
 
-        else:
-            if inpeak:
+        #else:
+        #    if inpeak:
                 # We finalize the peak
-                inpeak = False # Note that the "if" below will run to count this interval behind the last peak as non_peak energy
-                peak["endi"] = i-1
-                peak["energy"] = energy.iloc[peak["endi"]] - energy.iloc[peak["starti"]]
+        #        inpeak = False # Note that the "if" below will run to count this interval behind the last peak as non_peak energy
+        #        peak["endi"] = i-1
+        #        peak["energy"] = energy.iloc[peak["endi"]] - energy.iloc[peak["starti"]]
 
-                if peak["energy"] < 0.5: #  or np.isnan(peak["energy"]):
-                    peaks.append(peak)
+        #        if peak["energy"] < 0.5: #  or np.isnan(peak["energy"]):
+        #            peaks.append(peak)
             
 
-    labelypos = [2000, 3000] # Alternating heights, to avoid overlap
+    #labelypos = [2000]# [2000, 3000] # Alternating heights, to avoid overlap
     
     for (i, peak) in enumerate(peaks):
+
+        inpeakmask = np.logical_and(df["datetime"] >= df["datetime"].iloc[peak["starti"]], df["datetime"] <= df["datetime"].iloc[peak["endi"]])
+
+        ax.fill_between(df["datetime"], power, peak["basepower"], where=inpeakmask, color="red", alpha=0.4)
         #print(peak)
-        ax.axvline(df.datetime.iloc[peak["starti"]], color="black", zorder=-100)
-        ax.axvline(df.datetime.iloc[peak["endi"]], color="black", zorder=-100)
+        #ax.axvline(df.datetime.iloc[peak["starti"]], color="black", lw=2, zorder=-100)
+        #ax.axvline(df.datetime.iloc[peak["endi"]], color="black", lw=2, zorder=-100)
+        #ax.plot([df.datetime.iloc[peak["starti"]], df.datetime.iloc[peak["endi"]]], [peak["basepower"], peak["basepower"]], color="black", marker="None", ls='-', lw=2)
+        #ax.axhline(y=peak["baselevel"], xmin=df.datetime.iloc[peak["starti"]], xmax=df.datetime.iloc[peak["endi"]], color="black", zorder=-100)
         centeri = int((peak["starti"] + peak["endi"]) / 2)
-        ax.text(df.datetime.iloc[centeri], labelypos[i % 2], f"{peak['energy']:.1f} kWh",
-            horizontalalignment='center', color="black", rotation=90, fontsize=7)
+        ax.text(df.datetime.iloc[centeri], 2000, f"{peak['energy']:.1f} kWh = {peak['energy']*energy_cost:.2f} €",
+            horizontalalignment='center', color="black", rotation=90, fontsize=8)
     
 
 
