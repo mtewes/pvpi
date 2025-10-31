@@ -119,7 +119,7 @@ def create_overview_fig(df, suptitle=None):
     plot_outdoor(axes[4], df)
     plot_explore(axes[5], df)
 
-    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.92, y=0.987, fontsize=10)
+    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.92, y=0.99, fontsize=10)
 
     fig.tight_layout()
     return fig
@@ -303,12 +303,12 @@ def plot_heat_temps(ax, df):
     # Add Text with number of compressor starts
     starts = df["VitocalOpen3E_HeatPumpCompressorStatistical_starts"]
     nstarts = int(starts[len(df)-1] - starts[0])
-    ax.text(0.85, 0.95, f'Kompressorstarts: {nstarts}', transform=ax.transAxes, fontsize=8,
+    ax.text(0.80, 0.95, f'Kompressorstarts: {nstarts}', transform=ax.transAxes, fontsize=8,
         verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
 
     # Text with start and end temperature of DHW
     
-    ax.text(0.80, 0.85, f'WW Verlauf: {df["VitocalOpen3E_DomesticHotWaterSensor_Actual"].iloc[0]:.1f} -> {df["VitocalOpen3E_DomesticHotWaterSensor_Actual"].iloc[-1]:.1f} °C', transform=ax.transAxes, fontsize=8,
+    ax.text(0.80, 0.80, f'WW Verlauf: {df["VitocalOpen3E_DomesticHotWaterSensor_Actual"].iloc[0]:.1f} -> {df["VitocalOpen3E_DomesticHotWaterSensor_Actual"].iloc[-1]:.1f} °C', transform=ax.transAxes, fontsize=8,
         verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
 
 
