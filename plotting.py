@@ -119,7 +119,7 @@ def create_overview_fig(df, suptitle=None):
     plot_outdoor(axes[4], df)
     plot_explore(axes[5], df)
 
-    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.92, y=0.99, fontsize=10)
+    fig.suptitle(suptitle, horizontalalignment="right", verticalalignment="top", x=0.5, y=0.99, fontsize=10)
 
     fig.tight_layout()
     return fig
@@ -165,18 +165,98 @@ def plot_power_log(ax, df):
     """Energy production and consumption"""
 
     ax.plot(df["datetime"], df["SMATripower_pgenerate"], label="Erzeugung", lw=1, color="green")
+    ax.fill_between(df["datetime"], df["SMATripower_pgenerate"], 0, color="green", alpha=0.1)
+    
     
     ax.plot(df["datetime"], df["SMATripower_psupply"], label="Einspeisung", color="orange", lw=1, ls="--")
     #ax.plot(df["datetime"], df["SMAHomeManager_psupply"], label="SMAHomeManager_psupply")
      
     ax.plot(df["datetime"], df["SMATripower_ppurchase"], label="Kauf", lw=0.5, color="red")
-    ax.fill_between(df["datetime"], df["SMATripower_ppurchase"], 0, color="red", alpha=0.2)
+    #ax.fill_between(df["datetime"], df["SMATripower_ppurchase"], 0, color="red", alpha=0.2)
     #ax.plot(df["datetime"], df["SMAHomeManager_ppurchase"], label="SMAHomeManager_ppurchase")
 
     ax.plot(df["datetime"], df["VitocalOpen3E_CurrentElectricalPowerConsumptionSystem"], label="Wärmepumpe", lw=1, color="blue")
+    ax.fill_between(df["datetime"], df["VitocalOpen3E_CurrentElectricalPowerConsumptionSystem"], 0, color="blue", alpha=0.3)
     
 
+    # Now the processing of peaks
     
+    
+    power = df["VitocalOpen3E_CurrentElectricalPowerConsumptionSystem"] # in W
+    
+    past_power = 0
+    detect_delta_power = 20 # in W
+    energy_cost = 0.4 # in EUR/kWh
+
+    peaks = []
+    inpeak = False
+
+    # Now the ugly loop, using only "power", no energy meter:
+
+    for i in range(1, len(power)-1): # we skip the first
+
+        current_power = power.iloc[i]
+
+        if not inpeak:
+            if current_power > detect_delta_power:
+                # We start a peak
+                inpeak = True # Note that the "if" below will run to take this energy in account for the peak
+                peak = {"starti":i, "basepower":past_power, "maxpower":current_power, "energy":0.0}
+            else:
+                pass
+        
+        else: # we are inpeak
+            
+            if current_power > peak["maxpower"]:
+                peak["maxpower"] = current_power
+
+            peak["endi"] = i-1
+            peak["duration"] = df["datetime"].iloc[peak["endi"]] - df["datetime"].iloc[peak["starti"]]
+            peak["energy"] += current_power / 1000.0 * ( (df["datetime"].iloc[i-1] - df["datetime"].iloc[i-2]).total_seconds() / 3600.0 )
+
+            if current_power < detect_delta_power:
+                # We finalize the peak
+                inpeak = False
+                
+                if peak["energy"] > 0.02:
+                    peaks.append(peak)
+                else:
+                    peak = {} # Just to be sure
+                
+        past_power = current_power
+        
+    
+    for (i, peak) in enumerate(peaks):
+
+        #inpeakmask = np.logical_and(df["datetime"] >= df["datetime"].iloc[peak["starti"]], df["datetime"] <= df["datetime"].iloc[peak["endi"]])
+        #ax.fill_between(df["datetime"], power, peak["basepower"], where=inpeakmask, color="blue", alpha=0.2)
+        
+        centeri = int((peak["starti"] + peak["endi"]) / 2)
+        ax.text(df.datetime.iloc[centeri], 100, f"{peak['energy']:.1f} kWh",
+            horizontalalignment='center', color="white", rotation=90, fontsize=10)
+    
+
+    # Gesamtverbrauch Wärmepumpe geschätzt durch summe energy der peaks
+    e_wp = sum([peak["energy"] for peak in peaks]) # in kWh
+
+    # Gesamterzeugung geschätzt durch integration der Erzeugungskurve
+    e_gen = 0.0
+    power = df["SMATripower_pgenerate"] # in W
+    
+    for i in range(1, len(power)-1): # we skip the first
+        this_step_energy = power.iloc[i] * ( (df["datetime"].iloc[i] - df["datetime"].iloc[i-1]).total_seconds() / 3600.0 ) # in Wh
+        if power.iloc[i] > 0.0:
+            e_gen += this_step_energy
+
+    textstr = '\n'.join((
+        f'Wärmepumpe: {e_wp:.2f} kWh',
+        f'Erzeugung: {e_gen/1000.0:.2f} kWh'
+        ))
+    ax.text(0.85, 0.95, textstr, transform=ax.transAxes, fontsize=8,
+        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+    
+
+
     set_time_axis(ax, df)
 
     #ax.yaxis.set_major_locator(MultipleLocator(5))
@@ -316,8 +396,8 @@ def plot_power(ax, df):
         #ax.plot([df.datetime.iloc[peak["starti"]], df.datetime.iloc[peak["endi"]]], [peak["basepower"], peak["basepower"]], color="black", marker="None", ls='-', lw=2)
         #ax.axhline(y=peak["baselevel"], xmin=df.datetime.iloc[peak["starti"]], xmax=df.datetime.iloc[peak["endi"]], color="black", zorder=-100)
         centeri = int((peak["starti"] + peak["endi"]) / 2)
-        ax.text(df.datetime.iloc[centeri], 2000, f"{peak['energy']:.1f} kWh = {peak['energy']*energy_cost:.2f} €",
-            horizontalalignment='center', color="black", rotation=90, fontsize=8)
+        ax.text(df.datetime.iloc[centeri], 1000, f"{peak['energy']:.1f} kWh = {peak['energy']*energy_cost:.2f} €",
+            horizontalalignment='center', color="black", rotation=90, fontsize=10)
     
 
 
