@@ -100,7 +100,7 @@ def on_message(client, userdata, message):
     # userdata is a dict with all the latest measurements
 
     # Update the dict:
-    userdata[message.topic] = {"date":now(), "payload":message.payload}
+    userdata[message.topic] = {"date":now(), "payload":message.payload, "value":float(message.payload)} # So that "value" always exits, even if this gets updated within the main loop.
     logger.debug(f"Message recieved: {message.topic} : {message.payload}")
     
 
@@ -153,6 +153,7 @@ def main():
                 display_i = 0
 
 
+            # We set old content to None:
             for topic in topics:
                 
                 try:
